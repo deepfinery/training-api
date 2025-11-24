@@ -1,0 +1,137 @@
+{
+  "info": {
+    "name": "Trainer APIs",
+    "schema": "https://schema.getpostman.com/json/collection/v2.1.0/collection.json",
+    "description": "Collection covering Nemo, Meta, and HF+Unsloth trainer APIs."
+  },
+  "item": [
+    {
+      "name": "Nemo Trainer",
+      "item": [
+        {
+          "name": "Health Check",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{nemo_base_url}}/healthz",
+              "host": ["{{nemo_base_url}}"],
+              "path": ["healthz"]
+            }
+          }
+        },
+        {
+          "name": "Submit Training Job",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"job_id\": \"nemo-sample-001\",\n  \"base_model\": {\n    \"provider\": \"nemo\",\n    \"model_name\": \"nemotron-4-340b\",\n    \"revision\": \"main\"\n  },\n  \"datasets\": [\n    {\n      \"source\": \"s3://datasets/nemo.jsonl\",\n      \"format\": \"jsonl\"\n    }\n  ],\n  \"customization\": {\n    \"method\": \"lora\",\n    \"precision\": \"bf16\"\n  },\n  \"resources\": {\n    \"gpus\": 8,\n    \"gpu_type\": \"H100\",\n    \"cpus\": 48,\n    \"memory_gb\": 512,\n    \"max_duration_minutes\": 1440\n  },\n  \"artifacts\": {\n    \"log_uri\": \"s3://logs/nemo-sample-001/\",\n    \"output_uri\": \"s3://models/nemo-sample-001/\"\n  },\n  \"tuning_parameters\": {\n    \"learning_rate\": 0.0001,\n    \"batch_size\": 128,\n    \"num_epochs\": 2,\n    \"warmup_ratio\": 0.05,\n    \"max_sequence_length\": 8192\n  },\n  \"extra_parameters\": {\n    \"container_image\": \"nvcr.io/nvidia/nemo:24.03\"\n  }\n}"
+            },
+            "url": {
+              "raw": "{{nemo_base_url}}/train",
+              "host": ["{{nemo_base_url}}"],
+              "path": ["train"]
+            }
+          }
+        }
+      ]
+    },
+    {
+      "name": "Meta Trainer",
+      "item": [
+        {
+          "name": "Health Check",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{meta_base_url}}/healthz",
+              "host": ["{{meta_base_url}}"],
+              "path": ["healthz"]
+            }
+          }
+        },
+        {
+          "name": "Submit Training Job",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"job_id\": \"meta-sample-001\",\n  \"base_model\": {\n    \"provider\": \"meta\",\n    \"model_name\": \"Llama-3-70b\"\n  },\n  \"datasets\": [\n    {\n      \"source\": \"azure://datasets/meta.parquet\",\n      \"format\": \"parquet\"\n    }\n  ],\n  \"customization\": {\n    \"method\": \"full\",\n    \"precision\": \"bf16\"\n  },\n  \"resources\": {\n    \"gpus\": 8,\n    \"gpu_type\": \"A100\",\n    \"cpus\": 64,\n    \"memory_gb\": 512,\n    \"max_duration_minutes\": 720\n  },\n  \"artifacts\": {\n    \"log_uri\": \"azure://logs/meta-sample-001/\",\n    \"output_uri\": \"azure://models/meta-sample-001/\"\n  },\n  \"tuning_parameters\": {\n    \"learning_rate\": 0.00015,\n    \"batch_size\": 256,\n    \"num_epochs\": 1,\n    \"warmup_ratio\": 0.1,\n    \"max_sequence_length\": 4096\n  },\n  \"extra_parameters\": {\n    \"executor\": \"torchrun\"\n  }\n}"
+            },
+            "url": {
+              "raw": "{{meta_base_url}}/train",
+              "host": ["{{meta_base_url}}"],
+              "path": ["train"]
+            }
+          }
+        }
+      ]
+    },
+    {
+      "name": "HF + Unsloth Trainer",
+      "item": [
+        {
+          "name": "Health Check",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{hf_unsloth_base_url}}/healthz",
+              "host": ["{{hf_unsloth_base_url}}"],
+              "path": ["healthz"]
+            }
+          }
+        },
+        {
+          "name": "Submit Training Job",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"job_id\": \"hf-unsloth-sample-001\",\n  \"base_model\": {\n    \"provider\": \"huggingface\",\n    \"model_name\": \"NousResearch/Meta-Llama-3-8B\",\n    \"auth_token\": \"hf_xxx\"\n  },\n  \"datasets\": [\n    {\n      \"source\": \"gcs://datasets/hf.jsonl\",\n      \"format\": \"jsonl\"\n    }\n  ],\n  \"customization\": {\n    \"method\": \"qlora\",\n    \"precision\": \"bf16\"\n  },\n  \"resources\": {\n    \"gpus\": 2,\n    \"gpu_type\": \"L4\",\n    \"cpus\": 16,\n    \"memory_gb\": 128,\n    \"max_duration_minutes\": 360\n  },\n  \"artifacts\": {\n    \"log_uri\": \"gcs://logs/hf-unsloth-sample-001/\",\n    \"output_uri\": \"gcs://models/hf-unsloth-sample-001/\"\n  },\n  \"tuning_parameters\": {\n    \"learning_rate\": 0.0002,\n    \"batch_size\": 64,\n    \"num_epochs\": 3,\n    \"warmup_ratio\": 0.1,\n    \"max_sequence_length\": 4096\n  },\n  \"extra_parameters\": {\n    \"unsloth\": {\n      \"optimize_long_context\": true,\n      \"quantization\": \"bnb-nf4\",\n      \"gradient_accumulation\": 8\n    }\n  }\n}"
+            },
+            "url": {
+              "raw": "{{hf_unsloth_base_url}}/train",
+              "host": ["{{hf_unsloth_base_url}}"],
+              "path": ["train"]
+            }
+          }
+        }
+      ]
+    }
+  ],
+  "variable": [
+    {
+      "key": "nemo_base_url",
+      "value": "http://localhost:8081"
+    },
+    {
+      "key": "meta_base_url",
+      "value": "http://localhost:8082"
+    },
+    {
+      "key": "hf_unsloth_base_url",
+      "value": "http://localhost:8083"
+    }
+  ]
+}

@@ -74,6 +74,11 @@ Each service validates its backend-specific constraints and ingests the job into
 3. `pip install -r requirements.txt`
 4. `uvicorn app:app --reload`
 
+## API Tooling
+
+- Full HTTP contract: `docs/API_SPEC.md`
+- Postman collection: `docs/postman/trainer-apis.postman_collection.json` (variables default to localhost ports 8081/8082/8083; adjust for your cluster endpoints).
+
 ## Kubernetes
 
 Each service exposes a minimal Deployment + Service manifest under `services/<api>/k8s`. Adjust requests/limits and config maps to supply credentials (tokens, storage URIs), then `kubectl apply -f k8s/`.

@@ -10,5 +10,5 @@ Each API accepts a superset of tuning parameters (model location, adapters, PEFT
 
 Every service ships with a Dockerfile and Kubernetes manifests to help you deploy onto a cluster quickly.
 
-See `docs/USAGE.md` for workflows and the `services/*/k8s` folders for Kubernetes deployment assets.
+See `docs/USAGE.md` for workflows, `docs/API_SPEC.md` for the HTTP contract, and the `services/*/k8s` folders for Kubernetes deployment assets. Import the Postman collection under `docs/postman/trainer-apis.postman_collection.json` to exercise each API quickly.
 # training-api
