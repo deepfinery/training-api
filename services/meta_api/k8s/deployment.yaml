@@ -1,0 +1,41 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: meta-trainer
+spec:
+  replicas: 2
+  selector:
+    matchLabels:
+      app: meta-trainer
+  template:
+    metadata:
+      labels:
+        app: meta-trainer
+    spec:
+      containers:
+        - name: api
+          image: ghcr.io/your-org/meta-trainer:latest
+          ports:
+            - containerPort: 8080
+          env:
+            - name: EXECUTOR
+              value: torchrun
+          resources:
+            requests:
+              cpu: "750m"
+              memory: "2Gi"
+            limits:
+              cpu: "2"
+              memory: "4Gi"
+          readinessProbe:
+            httpGet:
+              path: /healthz
+              port: 8080
+            initialDelaySeconds: 5
+            periodSeconds: 10
+          livenessProbe:
+            httpGet:
+              path: /healthz
+              port: 8080
+            initialDelaySeconds: 10
+            periodSeconds: 20

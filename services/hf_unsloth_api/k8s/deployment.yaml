@@ -1,0 +1,41 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: hf-unsloth-trainer
+spec:
+  replicas: 2
+  selector:
+    matchLabels:
+      app: hf-unsloth-trainer
+  template:
+    metadata:
+      labels:
+        app: hf-unsloth-trainer
+    spec:
+      containers:
+        - name: api
+          image: ghcr.io/your-org/hf-unsloth-trainer:latest
+          ports:
+            - containerPort: 8080
+          env:
+            - name: UNSLOTH_OPTIMIZE_LONG_CONTEXT
+              value: "true"
+          resources:
+            requests:
+              cpu: "500m"
+              memory: "1Gi"
+            limits:
+              cpu: "2"
+              memory: "4Gi"
+          readinessProbe:
+            httpGet:
+              path: /healthz
+              port: 8080
+            initialDelaySeconds: 5
+            periodSeconds: 10
+          livenessProbe:
+            httpGet:
+              path: /healthz
+              port: 8080
+            initialDelaySeconds: 10
+            periodSeconds: 20
