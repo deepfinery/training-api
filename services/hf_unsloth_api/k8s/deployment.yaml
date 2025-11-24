@@ -20,6 +20,8 @@ spec:
           env:
             - name: UNSLOTH_OPTIMIZE_LONG_CONTEXT
               value: "true"
+            - name: TRAINER_API_TOKEN
+              value: "trainer-demo-token"
           resources:
             requests:
               cpu: "500m"

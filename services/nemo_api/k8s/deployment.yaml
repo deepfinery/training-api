@@ -16,13 +16,16 @@ spec:
     spec:
       containers:
         - name: api
-          image: ghcr.io/your-org/nemo-trainer:latest
+          image: docker.io/deepfinery/nemo-trainer:1.0
           imagePullPolicy: IfNotPresent
           ports:
             - containerPort: 8080
           envFrom:
             - configMapRef:
                 name: nemo-trainer-config
+          env:
+            - name: TRAINER_API_TOKEN
+              value: "trainer-demo-token"
           resources:
             requests:
               cpu: "500m"

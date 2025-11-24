@@ -20,6 +20,8 @@ spec:
           env:
             - name: EXECUTOR
               value: torchrun
+            - name: TRAINER_API_TOKEN
+              value: "trainer-demo-token"
           resources:
             requests:
               cpu: "750m"
