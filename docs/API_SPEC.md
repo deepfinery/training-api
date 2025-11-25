@@ -75,7 +75,7 @@ Use for readiness probes.
 - `learning_rate`, `batch_size`, `micro_batch_size`, `num_epochs`, `warmup_ratio`, `max_sequence_length`, `weight_decay`
 
 #### `callbacks`
-- `webhook_url`, `auth_header`, `event_filter[]`
+- `webhook_url`, `auth_header`, `event_filter[]`. When provided, the trainer POSTs status updates (same schema as `TrainingResponse` plus a `timestamp`) to this webhook every 60 seconds while the job is pending/running. A final update is sent when the job reaches `succeeded`, `failed`, or `cancelled`. Tune the cadence with the `TRAINER_CALLBACK_INTERVAL_SECONDS` environment variable.
 
 #### `extra_parameters`
 - `container_image`, `executor`, `unsloth` etc.
@@ -142,7 +142,7 @@ Use for readiness probes.
   "job_id": "demo-001",
   "backend_job_id": "hf-unsloth-demo-001",
   "status": "submitted",
-  "detail": null,
+  "detail": "Job accepted for processing",
   "dashboard_url": null,
   "metadata": {
     "job_spec": { "..." }
@@ -150,8 +150,41 @@ Use for readiness probes.
 }
 ```
 
-- `status` mirrors the mock runner states: `submitted`, `running`, `failed`, `succeeded`.
+- `status` mirrors the mock runner states: `submitted`, `running`, `failed`, `succeeded`, `cancelled`.
 - `metadata.job_spec` echoes what was handed to the backend/job runner.
+- `detail` summarizes what just happened (`"Job accepted..."`, `"Job cancellation requested"`, or `"Job already failed"`).
+
+### Callback Notifications
+
+If the request includes `callbacks.webhook_url`, the trainer posts the latest job status to that URL every minute (configurable via `TRAINER_CALLBACK_INTERVAL_SECONDS`). The payload mirrors the `TrainingResponse` shape and adds a `timestamp` (UNIX epoch seconds):
+
+```json
+{
+  "job_id": "demo-001",
+  "backend_job_id": "hf-unsloth-demo-001",
+  "status": "running",
+  "detail": "Job is running",
+  "timestamp": 1715862604.123
+}
+```
+
+## Get Training Job Status
+
+`GET /train/{job_id}`
+
+Returns the current `TrainingResponse` payload (same schema as `/train` response) for the requested job id. Use this to poll from the Launcher UI.
+
+- `200 OK` – found the job, response body is the `TrainingResponse`.
+- `404 Not Found` – job id has not been submitted.
+
+## Cancel Training Job
+
+`POST /train/{job_id}/cancel`
+
+Marks an in-flight job as cancelled. If the job is already terminal (failed/succeeded/cancelled) the `detail` field clarifies its current state.
+
+- `200 OK` – includes the updated `TrainingResponse`.
+- `404 Not Found` – job id unknown.
 
 ### Backend-Specific Notes
 

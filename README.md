@@ -182,7 +182,18 @@ kubectl get all
         -H "X-TRAINER-TOKEN: ${TRAINER_API_TOKEN:-trainer-demo-token}" \
         -d @payload.json
    ```
+4. Poll job status or cancel if needed:
+   ```bash
+   # Status
+   curl "$TRAINER_BASE_URL/train/hf-demo-001" \
+        -H "X-TRAINER-TOKEN: ${TRAINER_API_TOKEN:-trainer-demo-token}"
+
+   # Cancel
+   curl -X POST "$TRAINER_BASE_URL/train/hf-demo-001/cancel" \
+        -H "X-TRAINER-TOKEN: ${TRAINER_API_TOKEN:-trainer-demo-token}"
+   ```
+5. If you include a `callbacks.webhook_url` in the submission payload, the trainer automatically POSTs status updates (job id, backend id, status, detail, timestamp) to Training Studio every minute while the job is running or until it reaches a terminal state. Set `TRAINER_CALLBACK_INTERVAL_SECONDS` to tune the cadence (default 60s).
 
 ### Postman
 
-Import `docs/postman/trainer-apis.postman_collection.json`, set the `nemo_base_url`, `meta_base_url`, `hf_unsloth_base_url`, and `trainer_api_token` variables, then choose the `Submit Training Job` request for the service you deployed. The bodies already reference the Deepfinery S3 bucket layout and include the Hugging Face token field, so you only need to tweak IDs or resource sizes.
+Import `docs/postman/trainer-apis.postman_collection.json`, set the `nemo_base_url`, `meta_base_url`, `hf_unsloth_base_url`, `trainer_api_token`, and the sample job ids, then choose the `Submit Training Job`/`Get Job Status`/`Cancel Job` requests for the service you deployed. The bodies already reference the Deepfinery S3 bucket layout, include the Hugging Face token field, and ship with a sample callback configuration so you only need to tweak IDs or resource sizes.

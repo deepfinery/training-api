@@ -32,3 +32,19 @@ def schedule_training(
         return backend.schedule_training(request)
     except ValueError as exc:  # pragma: no cover - FastAPI already tested
         raise HTTPException(status_code=400, detail=str(exc)) from exc
+
+
+@app.get("/train/{job_id}", response_model=TrainingResponse)
+def get_training_status(job_id: str, _: None = Depends(require_token)) -> TrainingResponse:
+    try:
+        return backend.get_status(job_id)
+    except KeyError as exc:  # pragma: no cover
+        raise HTTPException(status_code=404, detail=f"Job {job_id} not found") from exc
+
+
+@app.post("/train/{job_id}/cancel", response_model=TrainingResponse)
+def cancel_training(job_id: str, _: None = Depends(require_token)) -> TrainingResponse:
+    try:
+        return backend.cancel_training(job_id)
+    except KeyError as exc:  # pragma: no cover
+        raise HTTPException(status_code=404, detail=f"Job {job_id} not found") from exc

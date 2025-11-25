@@ -68,6 +68,8 @@ All APIs share the `/train` endpoint. POST a JSON payload describing the trainin
 
 Each service validates its backend-specific constraints and ingests the job into the mock scheduler. Replace the `MockJobRunner` with your infrastructure (Kubernetes Jobs, Slurm, SageMaker, etc.).
 
+When the job submission succeeds the API responds with status `submitted` and `detail: "Job accepted for processing"`. Follow-up status checks (described below) update `status` to `running`, `succeeded`, `failed`, or `cancelled` with a matching `detail` message, and—if you provided a callback—the service pushes the same payload to Training Studio automatically.
+
 ### S3 Layout
 
 Training Studio organizes datasets and artifacts under a shared bucket prefix:
@@ -76,6 +78,28 @@ Training Studio organizes datasets and artifacts under a shared bucket prefix:
 - Logs and checkpoints should be written back to `s3://deepfinery-training-data-<account>/users/<userId>/projects/<projectId>/logs/` and `.../results/`.
 
 Reusing these conventions in `datasets[].source`, `artifacts.log_uri`, and `artifacts.output_uri` keeps IAM policies aligned with the launcher app.
+
+### Checking Status or Cancelling
+
+Every trainer service exposes:
+
+- `GET /train/{job_id}` – returns the latest `TrainingResponse` object for that job (same schema as the submission response). Poll this endpoint from Launcher to surface `status` + `detail`.
+- `POST /train/{job_id}/cancel` – transitions the job to `cancelled` when possible, or echoes the current terminal state with an informative `detail` string.
+
+Remember to pass the `X-TRAINER-TOKEN` header on these requests as well.
+
+### Callback Updates
+
+Include a `callbacks` block in your request to have the trainer notify Training Studio automatically:
+
+```json
+"callbacks": {
+  "webhook_url": "https://training-studio.internal/api/jobs/status",
+  "auth_header": "Bearer studio-token"
+}
+```
+
+When a job is pending or running, the API POSTs a JSON payload that mirrors `TrainingResponse` (`job_id`, `backend_job_id`, `status`, `detail`, `timestamp`) to the webhook every minute. Once the job reaches a terminal state (succeeded, failed, cancelled) the callback sends a final update and stops. Adjust the frequency by setting `TRAINER_CALLBACK_INTERVAL_SECONDS`.
 
 ## Running Locally
 

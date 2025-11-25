@@ -36,12 +36,46 @@
             ],
             "body": {
               "mode": "raw",
-              "raw": "{\n  \"job_id\": \"nemo-sample-001\",\n  \"base_model\": {\n    \"provider\": \"nemo\",\n    \"model_name\": \"nemotron-4-340b\",\n    \"revision\": \"main\"\n  },\n  \"datasets\": [\n    {\n      \"source\": \"s3://deepfinery-training-data-123456/users/e468b458-c061-70ca-966f-bb439ffde5e3/projects/6925ccd958905b1e58631d2c/ingestion/nemo-sample-001.jsonl\",\n      \"format\": \"jsonl\"\n    }\n  ],\n  \"customization\": {\n    \"method\": \"lora\",\n    \"precision\": \"bf16\"\n  },\n  \"resources\": {\n    \"gpus\": 8,\n    \"gpu_type\": \"H100\",\n    \"cpus\": 48,\n    \"memory_gb\": 512,\n    \"max_duration_minutes\": 1440\n  },\n  \"artifacts\": {\n    \"log_uri\": \"s3://deepfinery-training-data-123456/users/e468b458-c061-70ca-966f-bb439ffde5e3/projects/6925ccd958905b1e58631d2c/logs/nemo-sample-001/\",\n    \"output_uri\": \"s3://deepfinery-training-data-123456/users/e468b458-c061-70ca-966f-bb439ffde5e3/projects/6925ccd958905b1e58631d2c/results/\"\n  },\n  \"tuning_parameters\": {\n    \"learning_rate\": 0.0001,\n    \"batch_size\": 128,\n    \"num_epochs\": 2,\n    \"warmup_ratio\": 0.05,\n    \"max_sequence_length\": 8192\n  },\n  \"extra_parameters\": {\n    \"container_image\": \"nvcr.io/nvidia/nemo:24.03\"\n  }\n}"
+              "raw": "{\n  \"job_id\": \"nemo-sample-001\",\n  \"base_model\": {\n    \"provider\": \"nemo\",\n    \"model_name\": \"nemotron-4-340b\",\n    \"revision\": \"main\"\n  },\n  \"datasets\": [\n    {\n      \"source\": \"s3://deepfinery-training-data-123456/users/e468b458-c061-70ca-966f-bb439ffde5e3/projects/6925ccd958905b1e58631d2c/ingestion/nemo-sample-001.jsonl\",\n      \"format\": \"jsonl\"\n    }\n  ],\n  \"customization\": {\n    \"method\": \"lora\",\n    \"precision\": \"bf16\"\n  },\n  \"resources\": {\n    \"gpus\": 8,\n    \"gpu_type\": \"H100\",\n    \"cpus\": 48,\n    \"memory_gb\": 512,\n    \"max_duration_minutes\": 1440\n  },\n  \"artifacts\": {\n    \"log_uri\": \"s3://deepfinery-training-data-123456/users/e468b458-c061-70ca-966f-bb439ffde5e3/projects/6925ccd958905b1e58631d2c/logs/nemo-sample-001/\",\n    \"output_uri\": \"s3://deepfinery-training-data-123456/users/e468b458-c061-70ca-966f-bb439ffde5e3/projects/6925ccd958905b1e58631d2c/results/\"\n  },\n  \"tuning_parameters\": {\n    \"learning_rate\": 0.0001,\n    \"batch_size\": 128,\n    \"num_epochs\": 2,\n    \"warmup_ratio\": 0.05,\n    \"max_sequence_length\": 8192\n  },\n  \"extra_parameters\": {\n    \"container_image\": \"nvcr.io/nvidia/nemo:24.03\"\n  },\n  \"callbacks\": {\n    \"webhook_url\": \"https://training-studio.example.com/api/jobs/status\",\n    \"auth_header\": \"Bearer studio-token\"\n  }\n}"
             },
             "url": {
               "raw": "{{nemo_base_url}}/train",
               "host": ["{{nemo_base_url}}"],
               "path": ["train"]
+            }
+          }
+        },
+        {
+          "name": "Get Job Status",
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "X-TRAINER-TOKEN",
+                "value": "{{trainer_api_token}}"
+              }
+            ],
+            "url": {
+              "raw": "{{nemo_base_url}}/train/{{nemo_job_id}}",
+              "host": ["{{nemo_base_url}}"],
+              "path": ["train", "{{nemo_job_id}}"]
+            }
+          }
+        },
+        {
+          "name": "Cancel Job",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "X-TRAINER-TOKEN",
+                "value": "{{trainer_api_token}}"
+              }
+            ],
+            "url": {
+              "raw": "{{nemo_base_url}}/train/{{nemo_job_id}}/cancel",
+              "host": ["{{nemo_base_url}}"],
+              "path": ["train", "{{nemo_job_id}}", "cancel"]
             }
           }
         }
@@ -78,12 +112,46 @@
             ],
             "body": {
               "mode": "raw",
-              "raw": "{\n  \"job_id\": \"meta-sample-001\",\n  \"base_model\": {\n    \"provider\": \"meta\",\n    \"model_name\": \"Llama-3-70b\"\n  },\n  \"datasets\": [\n    {\n      \"source\": \"s3://deepfinery-training-data-123456/users/e468b458-c061-70ca-966f-bb439ffde5e3/projects/6925ccd958905b1e58631d2c/ingestion/meta-sample-001.parquet\",\n      \"format\": \"parquet\"\n    }\n  ],\n  \"customization\": {\n    \"method\": \"full\",\n    \"precision\": \"bf16\"\n  },\n  \"resources\": {\n    \"gpus\": 8,\n    \"gpu_type\": \"A100\",\n    \"cpus\": 64,\n    \"memory_gb\": 512,\n    \"max_duration_minutes\": 720\n  },\n  \"artifacts\": {\n    \"log_uri\": \"s3://deepfinery-training-data-123456/users/e468b458-c061-70ca-966f-bb439ffde5e3/projects/6925ccd958905b1e58631d2c/logs/meta-sample-001/\",\n    \"output_uri\": \"s3://deepfinery-training-data-123456/users/e468b458-c061-70ca-966f-bb439ffde5e3/projects/6925ccd958905b1e58631d2c/results/\"\n  },\n  \"tuning_parameters\": {\n    \"learning_rate\": 0.00015,\n    \"batch_size\": 256,\n    \"num_epochs\": 1,\n    \"warmup_ratio\": 0.1,\n    \"max_sequence_length\": 4096\n  },\n  \"extra_parameters\": {\n    \"executor\": \"torchrun\"\n  }\n}"
+              "raw": "{\n  \"job_id\": \"meta-sample-001\",\n  \"base_model\": {\n    \"provider\": \"meta\",\n    \"model_name\": \"Llama-3-70b\"\n  },\n  \"datasets\": [\n    {\n      \"source\": \"s3://deepfinery-training-data-123456/users/e468b458-c061-70ca-966f-bb439ffde5e3/projects/6925ccd958905b1e58631d2c/ingestion/meta-sample-001.parquet\",\n      \"format\": \"parquet\"\n    }\n  ],\n  \"customization\": {\n    \"method\": \"full\",\n    \"precision\": \"bf16\"\n  },\n  \"resources\": {\n    \"gpus\": 8,\n    \"gpu_type\": \"A100\",\n    \"cpus\": 64,\n    \"memory_gb\": 512,\n    \"max_duration_minutes\": 720\n  },\n  \"artifacts\": {\n    \"log_uri\": \"s3://deepfinery-training-data-123456/users/e468b458-c061-70ca-966f-bb439ffde5e3/projects/6925ccd958905b1e58631d2c/logs/meta-sample-001/\",\n    \"output_uri\": \"s3://deepfinery-training-data-123456/users/e468b458-c061-70ca-966f-bb439ffde5e3/projects/6925ccd958905b1e58631d2c/results/\"\n  },\n  \"tuning_parameters\": {\n    \"learning_rate\": 0.00015,\n    \"batch_size\": 256,\n    \"num_epochs\": 1,\n    \"warmup_ratio\": 0.1,\n    \"max_sequence_length\": 4096\n  },\n  \"extra_parameters\": {\n    \"executor\": \"torchrun\"\n  },\n  \"callbacks\": {\n    \"webhook_url\": \"https://training-studio.example.com/api/jobs/status\",\n    \"auth_header\": \"Bearer studio-token\"\n  }\n}"
             },
             "url": {
               "raw": "{{meta_base_url}}/train",
               "host": ["{{meta_base_url}}"],
               "path": ["train"]
+            }
+          }
+        },
+        {
+          "name": "Get Job Status",
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "X-TRAINER-TOKEN",
+                "value": "{{trainer_api_token}}"
+              }
+            ],
+            "url": {
+              "raw": "{{meta_base_url}}/train/{{meta_job_id}}",
+              "host": ["{{meta_base_url}}"],
+              "path": ["train", "{{meta_job_id}}"]
+            }
+          }
+        },
+        {
+          "name": "Cancel Job",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "X-TRAINER-TOKEN",
+                "value": "{{trainer_api_token}}"
+              }
+            ],
+            "url": {
+              "raw": "{{meta_base_url}}/train/{{meta_job_id}}/cancel",
+              "host": ["{{meta_base_url}}"],
+              "path": ["train", "{{meta_job_id}}", "cancel"]
             }
           }
         }
@@ -120,12 +188,46 @@
             ],
             "body": {
               "mode": "raw",
-              "raw": "{\n  \"job_id\": \"hf-unsloth-sample-001\",\n  \"base_model\": {\n    \"provider\": \"huggingface\",\n    \"model_name\": \"NousResearch/Meta-Llama-3-8B\",\n    \"auth_token\": \"hf_xxx\",\n    \"huggingface_token\": \"hf_launchpad_token\"\n  },\n  \"datasets\": [\n    {\n      \"source\": \"s3://deepfinery-training-data-123456/users/e468b458-c061-70ca-966f-bb439ffde5e3/projects/6925ccd958905b1e58631d2c/ingestion/hf-unsloth-sample-001.jsonl\",\n      \"format\": \"jsonl\"\n    }\n  ],\n  \"customization\": {\n    \"method\": \"qlora\",\n    \"precision\": \"bf16\"\n  },\n  \"resources\": {\n    \"gpus\": 2,\n    \"gpu_type\": \"L4\",\n    \"cpus\": 16,\n    \"memory_gb\": 128,\n    \"max_duration_minutes\": 360\n  },\n  \"artifacts\": {\n    \"log_uri\": \"s3://deepfinery-training-data-123456/users/e468b458-c061-70ca-966f-bb439ffde5e3/projects/6925ccd958905b1e58631d2c/logs/hf-unsloth-sample-001/\",\n    \"output_uri\": \"s3://deepfinery-training-data-123456/users/e468b458-c061-70ca-966f-bb439ffde5e3/projects/6925ccd958905b1e58631d2c/results/\"\n  },\n  \"tuning_parameters\": {\n    \"learning_rate\": 0.0002,\n    \"batch_size\": 64,\n    \"num_epochs\": 3,\n    \"warmup_ratio\": 0.1,\n    \"max_sequence_length\": 4096\n  },\n  \"extra_parameters\": {\n    \"unsloth\": {\n      \"optimize_long_context\": true,\n      \"quantization\": \"bnb-nf4\",\n      \"gradient_accumulation\": 8\n    }\n  }\n}"
+              "raw": "{\n  \"job_id\": \"hf-unsloth-sample-001\",\n  \"base_model\": {\n    \"provider\": \"huggingface\",\n    \"model_name\": \"NousResearch/Meta-Llama-3-8B\",\n    \"auth_token\": \"hf_xxx\",\n    \"huggingface_token\": \"hf_launchpad_token\"\n  },\n  \"datasets\": [\n    {\n      \"source\": \"s3://deepfinery-training-data-123456/users/e468b458-c061-70ca-966f-bb439ffde5e3/projects/6925ccd958905b1e58631d2c/ingestion/hf-unsloth-sample-001.jsonl\",\n      \"format\": \"jsonl\"\n    }\n  ],\n  \"customization\": {\n    \"method\": \"qlora\",\n    \"precision\": \"bf16\"\n  },\n  \"resources\": {\n    \"gpus\": 2,\n    \"gpu_type\": \"L4\",\n    \"cpus\": 16,\n    \"memory_gb\": 128,\n    \"max_duration_minutes\": 360\n  },\n  \"artifacts\": {\n    \"log_uri\": \"s3://deepfinery-training-data-123456/users/e468b458-c061-70ca-966f-bb439ffde5e3/projects/6925ccd958905b1e58631d2c/logs/hf-unsloth-sample-001/\",\n    \"output_uri\": \"s3://deepfinery-training-data-123456/users/e468b458-c061-70ca-966f-bb439ffde5e3/projects/6925ccd958905b1e58631d2c/results/\"\n  },\n  \"tuning_parameters\": {\n    \"learning_rate\": 0.0002,\n    \"batch_size\": 64,\n    \"num_epochs\": 3,\n    \"warmup_ratio\": 0.1,\n    \"max_sequence_length\": 4096\n  },\n  \"extra_parameters\": {\n    \"unsloth\": {\n      \"optimize_long_context\": true,\n      \"quantization\": \"bnb-nf4\",\n      \"gradient_accumulation\": 8\n    }\n  },\n  \"callbacks\": {\n    \"webhook_url\": \"https://training-studio.example.com/api/jobs/status\",\n    \"auth_header\": \"Bearer studio-token\"\n  }\n}"
             },
             "url": {
               "raw": "{{hf_unsloth_base_url}}/train",
               "host": ["{{hf_unsloth_base_url}}"],
               "path": ["train"]
+            }
+          }
+        },
+        {
+          "name": "Get Job Status",
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "X-TRAINER-TOKEN",
+                "value": "{{trainer_api_token}}"
+              }
+            ],
+            "url": {
+              "raw": "{{hf_unsloth_base_url}}/train/{{hf_unsloth_job_id}}",
+              "host": ["{{hf_unsloth_base_url}}"],
+              "path": ["train", "{{hf_unsloth_job_id}}"]
+            }
+          }
+        },
+        {
+          "name": "Cancel Job",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "X-TRAINER-TOKEN",
+                "value": "{{trainer_api_token}}"
+              }
+            ],
+            "url": {
+              "raw": "{{hf_unsloth_base_url}}/train/{{hf_unsloth_job_id}}/cancel",
+              "host": ["{{hf_unsloth_base_url}}"],
+              "path": ["train", "{{hf_unsloth_job_id}}", "cancel"]
             }
           }
         }
@@ -148,6 +250,18 @@
     {
       "key": "trainer_api_token",
       "value": "trainer-demo-token"
+    },
+    {
+      "key": "nemo_job_id",
+      "value": "nemo-sample-001"
+    },
+    {
+      "key": "meta_job_id",
+      "value": "meta-sample-001"
+    },
+    {
+      "key": "hf_unsloth_job_id",
+      "value": "hf-unsloth-sample-001"
     }
   ]
 }

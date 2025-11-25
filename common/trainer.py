@@ -18,12 +18,15 @@ class BaseTrainerBackend(ABC):
         self.validate_request(request)
         job_spec = self.build_job_spec(request)
         status = self.job_runner.submit(job_spec)
-        return TrainingResponse(
-            job_id=request.job_id,
-            backend_job_id=status.backend_job_id,
-            status=status.state.value,
-            metadata=status.metadata,
-        )
+        return self._status_to_response(status)
+
+    def get_status(self, job_id: str) -> TrainingResponse:
+        status = self.job_runner.get(job_id)
+        return self._status_to_response(status)
+
+    def cancel_training(self, job_id: str) -> TrainingResponse:
+        status = self.job_runner.cancel(job_id)
+        return self._status_to_response(status)
 
     @abstractmethod
     def validate_request(self, request: TrainingRequest) -> None:
@@ -32,3 +35,12 @@ class BaseTrainerBackend(ABC):
     @abstractmethod
     def build_job_spec(self, request: TrainingRequest) -> Dict[str, Any]:
         """Translate the request into whatever the job runner understands."""
+
+    def _status_to_response(self, status: JobStatus) -> TrainingResponse:
+        return TrainingResponse(
+            job_id=status.job_id,
+            backend_job_id=status.backend_job_id,
+            status=status.state.value,
+            detail=status.detail or f"Job {status.state.value}",
+            metadata=status.metadata,
+        )
