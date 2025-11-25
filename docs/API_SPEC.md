@@ -40,9 +40,11 @@ Use for readiness probes.
 - `revision`: optional git/tag revision
 - `weights_url`: optional direct download URL
 - `auth_token`: optional provider token
+- `huggingface_token`: optional token coming from the Launcher/Training Studio when the provider is `huggingface`
 
 #### `datasets[]`
-- `source`: URI/path (S3/GCS/Azure/minio/local)
+- `source`: URI/path (S3/GCS/Azure/minio/local). For enterprise tenants the canonical S3 structure is
+  `s3://deepfinery-training-data-<account>/users/<userId>/projects/<projectId>/ingestion/<dataset>.jsonl`.
 - `format`: `"jsonl" | "parquet" | "csv" | "hf" | "nemo"`
 - `split`: optional split name
 - `auth`: `{ token | username/password | role_arn }`
@@ -66,7 +68,8 @@ Use for readiness probes.
 #### `artifacts`
 - `log_uri`: e.g., `s3://bucket/logs/job-123/`
 - `status_stream_url`: optional SSE/WS endpoint
-- `output_uri`: e.g., `gs://bucket/models/job-123/`
+- `output_uri`: e.g., `gs://bucket/models/job-123/`. For Deepfinery buckets, results typically go to
+  `s3://deepfinery-training-data-<account>/users/<userId>/projects/<projectId>/results/`.
 
 #### `tuning_parameters`
 - `learning_rate`, `batch_size`, `micro_batch_size`, `num_epochs`, `warmup_ratio`, `max_sequence_length`, `weight_decay`
@@ -85,11 +88,12 @@ Use for readiness probes.
   "base_model": {
     "provider": "huggingface",
     "model_name": "meta-llama/Llama-2-7b",
-    "auth_token": "hf_token"
+    "auth_token": "hf_token",
+    "huggingface_token": "hf_launchpad_token"
   },
   "datasets": [
     {
-      "source": "s3://datasets/instruction.jsonl",
+      "source": "s3://deepfinery-training-data-123456/users/e468b458-c061-70ca-966f-bb439ffde5e3/projects/6925ccd958905b1e58631d2c/ingestion/1764106730023-tx_aml_dataset.jsonl",
       "format": "jsonl"
     }
   ],
@@ -106,8 +110,8 @@ Use for readiness probes.
     "max_duration_minutes": 720
   },
   "artifacts": {
-    "log_uri": "s3://logs/demo-001/",
-    "output_uri": "s3://models/demo-001/"
+    "log_uri": "s3://deepfinery-training-data-123456/users/e468b458-c061-70ca-966f-bb439ffde5e3/projects/6925ccd958905b1e58631d2c/logs/demo-001/",
+    "output_uri": "s3://deepfinery-training-data-123456/users/e468b458-c061-70ca-966f-bb439ffde5e3/projects/6925ccd958905b1e58631d2c/results/"
   },
   "tuning_parameters": {
     "learning_rate": 0.0002,

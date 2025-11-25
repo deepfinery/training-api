@@ -19,6 +19,9 @@ class BaseModelSpec(BaseModel):
     revision: Optional[str] = Field("main", description="Git/model revision")
     weights_url: Optional[HttpUrl] = Field(None, description="Direct download URL override")
     auth_token: Optional[str] = Field(None, description="Provider-specific auth token")
+    huggingface_token: Optional[str] = Field(
+        None, description="Optional Hugging Face access token from Training Studio"
+    )
 
 
 class DatasetSpec(BaseModel):

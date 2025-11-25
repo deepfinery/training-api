@@ -11,6 +11,12 @@ Each API accepts a superset of tuning parameters (model location, adapters, PEFT
 Every service ships with a Dockerfile and Kubernetes manifests to help you deploy onto a cluster quickly.
 
 See `docs/USAGE.md` for workflows, `docs/API_SPEC.md` for the HTTP contract, and the `services/*/k8s` folders for Kubernetes deployment assets. Import the Postman collection under `docs/postman/trainer-apis.postman_collection.json` to exercise each API quickly.
+
+## Launcher / Training Studio Notes
+
+- When `base_model.provider == "huggingface"` you can now supply the launcher-provided `huggingface_token` so the backend can fetch gated checkpoints on behalf of the user.
+- Training Studio organizes inputs/outputs at `s3://deepfinery-training-data-<account>/users/<userId>/projects/<projectId>/`. Place dataset uploads in the `ingestion/` folder and save logs/results in `logs/` and `results/` respectively to keep IAM policies aligned.
+
 # training-api
 
 ## Deploying to AKS with a Load Balancer
@@ -71,6 +77,13 @@ curl -H "X-TRAINER-TOKEN: trainer-demo-token" \
      http://localhost:8000/train
 ```
 
+If the training job needs to download/upload datasets from Deepfinery S3, also export the shared credentials (or rely on the included `.env`):
+
+```bash
+export AWS_ACCESS_KEY_ID=XXXX
+export AWS_SECRET_ACCESS_KEY='YYYYY'
+```
+
 ### 3. Apply the Manifests
 
 The `services/*/k8s` directories contain a Deployment, ConfigMap (where applicable), and a Service. Each Service is of type `LoadBalancer`, so AKS automatically wires the pods to an Azure Public Load Balancer.
@@ -91,8 +104,85 @@ kubectl get service -l app=hf-unsloth-trainer
 
 Send requests by calling `http://<external-ip>/train` (or `/healthz`) and always include `X-TRAINER-TOKEN`.
 
+#### Example Nemo Redeploy Commands
+
+```bash
+export DOCKERHUB_USER=<dockerhub-username-or-org>
+docker build -t docker.io/$DOCKERHUB_USER/nemo-trainer:1.0 -f services/nemo_api/Dockerfile .
+docker push docker.io/$DOCKERHUB_USER/nemo-trainer:1.0
+kubectl apply -f services/nemo_api/k8s/
+kubectl get service -l app=nemo-trainer
+kubectl get all
+# Optional clean redeploy
+kubectl delete -f services/nemo_api/k8s/
+kubectl apply -f services/nemo_api/k8s/
+kubectl get all
+```
+
 ### 4. Optional Hardening
 
 - Swap the inline token for a Kubernetes Secret (e.g., `kubectl create secret generic trainer-api --from-literal=token=...` and reference it with `valueFrom.secretKeyRef`).
 - Front the three Services with an Ingress Controller or Azure Application Gateway so you get TLS termination and a single hostname.
 - Configure Azure Monitor/Container Insights for observability and add Horizontal Pod Autoscalers for bursty training loads.
+
+## Calling the API
+
+1. Find the service endpoint:
+   ```bash
+   kubectl get svc nemo-trainer -o wide
+   # or meta-trainer / hf-unsloth-trainer depending on the backend
+   export TRAINER_BASE_URL="http://<external-ip-from-get-svc>"
+   ```
+2. Create a payload (example for the HF + Unsloth service showing the launcher-provided Hugging Face token plus the canonical Deepfinery S3 paths):
+   ```json
+   {
+     "job_id": "hf-demo-001",
+     "base_model": {
+       "provider": "huggingface",
+       "model_name": "meta-llama/Llama-2-7b",
+       "auth_token": "hf_token",
+       "huggingface_token": "hf_launchpad_token"
+     },
+     "datasets": [
+       {
+         "source": "s3://deepfinery-training-data-123456/users/e468b458-c061-70ca-966f-bb439ffde5e3/projects/6925ccd958905b1e58631d2c/ingestion/1764106730023-tx_aml_dataset.jsonl",
+         "format": "jsonl"
+       }
+     ],
+     "customization": {
+       "method": "qlora",
+       "precision": "bf16",
+       "gradient_checkpointing": true
+     },
+     "resources": {
+       "gpus": 4,
+       "gpu_type": "A100",
+       "cpus": 32,
+       "memory_gb": 256,
+       "max_duration_minutes": 720
+     },
+     "artifacts": {
+       "log_uri": "s3://deepfinery-training-data-123456/users/e468b458-c061-70ca-966f-bb439ffde5e3/projects/6925ccd958905b1e58631d2c/logs/hf-demo-001/",
+       "output_uri": "s3://deepfinery-training-data-123456/users/e468b458-c061-70ca-966f-bb439ffde5e3/projects/6925ccd958905b1e58631d2c/results/"
+     },
+     "tuning_parameters": {
+       "learning_rate": 0.0002,
+       "batch_size": 64,
+       "num_epochs": 3,
+       "warmup_ratio": 0.1,
+       "max_sequence_length": 4096
+     }
+   }
+   ```
+   Save this payload as `payload.json`. Swap the `provider` and dataset/artifact URIs as needed if you're targeting the Nemo or Meta services.
+3. Send the request with the trainer token header (matching whatever is set in `TRAINER_API_TOKEN` or the `.env` file):
+   ```bash
+   curl -X POST "$TRAINER_BASE_URL/train" \
+        -H "Content-Type: application/json" \
+        -H "X-TRAINER-TOKEN: ${TRAINER_API_TOKEN:-trainer-demo-token}" \
+        -d @payload.json
+   ```
+
+### Postman
+
+Import `docs/postman/trainer-apis.postman_collection.json`, set the `nemo_base_url`, `meta_base_url`, `hf_unsloth_base_url`, and `trainer_api_token` variables, then choose the `Submit Training Job` request for the service you deployed. The bodies already reference the Deepfinery S3 bucket layout and include the Hugging Face token field, so you only need to tweak IDs or resource sizes.

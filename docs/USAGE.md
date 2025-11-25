@@ -12,6 +12,7 @@ All APIs share the `/train` endpoint. POST a JSON payload describing the trainin
     "model_name": "meta-llama/Llama-2-7b",
     "revision": "main",
     "auth_token": "hf_xxx",
+    "huggingface_token": "hf_launchpad_token",
     "weights_url": null
   },
   "customization": {
@@ -40,15 +41,15 @@ All APIs share the `/train` endpoint. POST a JSON payload describing the trainin
   },
   "datasets": [
     {
-      "source": "s3://bucket/dataset.jsonl",
+      "source": "s3://deepfinery-training-data-123456/users/e468b458-c061-70ca-966f-bb439ffde5e3/projects/6925ccd958905b1e58631d2c/ingestion/1764106730023-tx_aml_dataset.jsonl",
       "format": "jsonl",
       "auth": {"role_arn": "arn:aws:iam::123:role/FineTune"}
     }
   ],
   "artifacts": {
-    "log_uri": "s3://bucket/logs/job-id/",
+    "log_uri": "s3://deepfinery-training-data-123456/users/e468b458-c061-70ca-966f-bb439ffde5e3/projects/6925ccd958905b1e58631d2c/logs/job-id/",
     "status_stream_url": "https://events.internal/job-id",
-    "output_uri": "s3://bucket/models/job-id/"
+    "output_uri": "s3://deepfinery-training-data-123456/users/e468b458-c061-70ca-966f-bb439ffde5e3/projects/6925ccd958905b1e58631d2c/results/"
   },
   "tuning_parameters": {
     "learning_rate": 2e-4,
@@ -66,6 +67,15 @@ All APIs share the `/train` endpoint. POST a JSON payload describing the trainin
 ```
 
 Each service validates its backend-specific constraints and ingests the job into the mock scheduler. Replace the `MockJobRunner` with your infrastructure (Kubernetes Jobs, Slurm, SageMaker, etc.).
+
+### S3 Layout
+
+Training Studio organizes datasets and artifacts under a shared bucket prefix:
+
+- Datasets uploaded by a user land at `s3://deepfinery-training-data-<account>/users/<userId>/projects/<projectId>/ingestion/<dataset>.jsonl`.
+- Logs and checkpoints should be written back to `s3://deepfinery-training-data-<account>/users/<userId>/projects/<projectId>/logs/` and `.../results/`.
+
+Reusing these conventions in `datasets[].source`, `artifacts.log_uri`, and `artifacts.output_uri` keeps IAM policies aligned with the launcher app.
 
 ## Running Locally
 
