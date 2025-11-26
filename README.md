@@ -125,6 +125,38 @@ kubectl get all
 - Front the three Services with an Ingress Controller or Azure Application Gateway so you get TLS termination and a single hostname.
 - Configure Azure Monitor/Container Insights for observability and add Horizontal Pod Autoscalers for bursty training loads.
 
+## Kubeflow Trainer Integration
+
+Install the NVIDIA GPU Operator (or equivalent drivers) plus the Kubeflow Trainer controller before switching away
+from the mock scheduler. The APIs now emit real [`TrainJob`](https://www.kubeflow.org/docs/components/trainer/) custom resources when
+`TRAINER_JOB_RUNNER` is set to `kubernetes` (the default in the bundled manifests). Each backend pulls its runtime
+settings from environment variables:
+
+- `TRAINER_RUNTIME_NAME`: cluster-scoped or namespaced `TrainingRuntime` to use (`nemo-runtime`, `meta-runtime`,
+  `hf-unsloth-runtime` by default). Override per-request by including `extra_parameters.runtime_ref`.
+- `TRAINER_TRAINJOB_API_VERSION`: CRD version (defaults to `trainer.kubeflow.org/v1alpha1`).
+- `TRAINER_JOBS_NAMESPACE`: namespace where TrainJobs should land. The manifests use the pod namespace via a
+  `fieldRef`.
+
+Deployments must use a service account with permissions to `create/get/list/watch/delete` the
+`trainer.kubeflow.org/trainjobs` resource. The `services/*/k8s/deployment.yaml` files now ship with a namespaced
+`Role`/`RoleBinding`.
+
+Every submitted request is translated into a TrainJob manifest that contains:
+
+- `runtimeRef`: resolved from the environment or `extra_parameters.runtime_ref`.
+- `trainer` block: image, command/args, resource requests, and merged environment variables. The raw
+  `TrainingRequest` is exposed to the container via `TRAINING_REQUEST_JSON`, `TRAINING_DATASETS_JSON`, etc.
+- Optional dataset/model initializer URIs and any custom labels/annotations supplied via `extra_parameters`.
+
+If you need different launchers (e.g., NeMo CLI vs. `torchrun`), override `extra_parameters.trainer_command`,
+`trainer_args`, and `trainer_env` directly in the submission payload. The Unsloth backend also accepts
+`extra_parameters.unsloth` which is passed to containers as `UNSLOTH_OPTIONS_JSON`.
+
+Because the TrainJob is a first-class object, status polling (`GET /train/{job_id}`) now reflects the CRD state.
+Callbacks remain enabled: when a webhook is configured the API polls the TrainJob until it reaches a terminal state
+and forwards the updates.
+
 ## Calling the API
 
 1. Find the service endpoint:

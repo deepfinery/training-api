@@ -14,9 +14,10 @@ spec:
       labels:
         app: nemo-trainer
     spec:
+      serviceAccountName: nemo-trainer-sa
       containers:
         - name: api
-          image: docker.io/deepfinery/nemo-trainer:1.0
+          image: docker.io/deepfinery/nemo-trainer:1.1
           imagePullPolicy: IfNotPresent
           ports:
             - containerPort: 8080
@@ -26,6 +27,16 @@ spec:
           env:
             - name: TRAINER_API_TOKEN
               value: "trainer-demo-token"
+            - name: TRAINER_JOB_RUNNER
+              value: "kubernetes"
+            - name: TRAINER_RUNTIME_NAME
+              value: "nemo-runtime"
+            - name: TRAINER_TRAINJOB_API_VERSION
+              value: "trainer.kubeflow.org/v1alpha1"
+            - name: TRAINER_JOBS_NAMESPACE
+              valueFrom:
+                fieldRef:
+                  fieldPath: metadata.namespace
           resources:
             requests:
               cpu: "500m"
@@ -55,3 +66,29 @@ metadata:
 data:
   DEFAULT_CONTAINER_IMAGE: "nvcr.io/nvidia/nemo:24.03"
   LOG_SINK_URI: "s3://bucket/logs"
+---
+apiVersion: v1
+kind: ServiceAccount
+metadata:
+  name: nemo-trainer-sa
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: Role
+metadata:
+  name: nemo-trainer-role
+rules:
+  - apiGroups: ["trainer.kubeflow.org"]
+    resources: ["trainjobs"]
+    verbs: ["get", "list", "watch", "create", "delete"]
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: RoleBinding
+metadata:
+  name: nemo-trainer-rb
+subjects:
+  - kind: ServiceAccount
+    name: nemo-trainer-sa
+roleRef:
+  apiGroup: rbac.authorization.k8s.io
+  kind: Role
+  name: nemo-trainer-role

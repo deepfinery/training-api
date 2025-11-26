@@ -6,13 +6,14 @@ from typing import Any, Dict
 
 from .job_runner import JobStatus, MockJobRunner
 from .schemas import TrainingRequest, TrainingResponse
+from .runners import build_job_runner
 
 
 class BaseTrainerBackend(ABC):
     """Shared validation + job submission pipeline."""
 
     def __init__(self, job_runner: MockJobRunner | None = None) -> None:
-        self.job_runner = job_runner or MockJobRunner()
+        self.job_runner = job_runner or build_job_runner()
 
     def schedule_training(self, request: TrainingRequest) -> TrainingResponse:
         self.validate_request(request)

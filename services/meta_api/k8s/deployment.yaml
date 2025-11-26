@@ -12,6 +12,7 @@ spec:
       labels:
         app: meta-trainer
     spec:
+      serviceAccountName: meta-trainer-sa
       containers:
         - name: api
           image: ghcr.io/your-org/meta-trainer:latest
@@ -22,6 +23,16 @@ spec:
               value: torchrun
             - name: TRAINER_API_TOKEN
               value: "trainer-demo-token"
+            - name: TRAINER_JOB_RUNNER
+              value: "kubernetes"
+            - name: TRAINER_RUNTIME_NAME
+              value: "meta-runtime"
+            - name: TRAINER_TRAINJOB_API_VERSION
+              value: "trainer.kubeflow.org/v1alpha1"
+            - name: TRAINER_JOBS_NAMESPACE
+              valueFrom:
+                fieldRef:
+                  fieldPath: metadata.namespace
           resources:
             requests:
               cpu: "750m"
@@ -41,3 +52,29 @@ spec:
               port: 8080
             initialDelaySeconds: 10
             periodSeconds: 20
+---
+apiVersion: v1
+kind: ServiceAccount
+metadata:
+  name: meta-trainer-sa
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: Role
+metadata:
+  name: meta-trainer-role
+rules:
+  - apiGroups: ["trainer.kubeflow.org"]
+    resources: ["trainjobs"]
+    verbs: ["get", "list", "watch", "create", "delete"]
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: RoleBinding
+metadata:
+  name: meta-trainer-rb
+subjects:
+  - kind: ServiceAccount
+    name: meta-trainer-sa
+roleRef:
+  apiGroup: rbac.authorization.k8s.io
+  kind: Role
+  name: meta-trainer-role

@@ -66,7 +66,10 @@ All APIs share the `/train` endpoint. POST a JSON payload describing the trainin
 }
 ```
 
-Each service validates its backend-specific constraints and ingests the job into the mock scheduler. Replace the `MockJobRunner` with your infrastructure (Kubernetes Jobs, Slurm, SageMaker, etc.).
+Each service validates its backend-specific constraints. By default they submit to the in-memory mock scheduler
+for local development, but when `TRAINER_JOB_RUNNER=kubernetes` is set the APIs create
+[`trainer.kubeflow.org/v1alpha1` `TrainJob`](https://www.kubeflow.org/docs/components/trainer/) resources using
+the runtime configured via `TRAINER_RUNTIME_NAME` (or `extra_parameters.runtime_ref` on a per-request basis).
 
 When the job submission succeeds the API responds with status `submitted` and `detail: "Job accepted for processing"`. Follow-up status checks (described below) update `status` to `running`, `succeeded`, `failed`, or `cancelled` with a matching `detail` message, and—if you provided a callback—the service pushes the same payload to Training Studio automatically.
 
