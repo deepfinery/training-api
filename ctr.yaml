@@ -1,0 +1,48 @@
+apiVersion: trainer.kubeflow.org/v1alpha1
+kind: ClusterTrainingRuntime
+metadata:
+  name: nemo-runtime
+spec:
+  mlPolicy:
+    numNodes: 1
+    torch:
+      numProcPerNode: auto
+  template:
+    spec:
+      replicatedJobs:
+        - name: node
+          template:
+            metadata:
+              labels:
+                trainer.kubeflow.org/trainjob-ancestor-step: trainer
+            spec:
+              template:
+                spec:
+                  serviceAccountName: nemo-trainer-sa
+                  restartPolicy: Never
+                  containers:
+                    - name: node
+                      image: nvcr.io/nvidia/nemo:24.03
+                      command: ["/bin/bash","-c"]
+                      args:
+                        - >
+                          echo "Override via TrainJob spec.trainer.command"; sleep infinity
+                      resources:
+                        requests: {cpu: "6", memory: "32Gi", nvidia.com/gpu: "1"}
+                        limits:   {cpu: "6", memory: "32Gi", nvidia.com/gpu: "1"}
+        - name: dataset-initializer
+          template:
+            metadata:
+              labels:
+                trainer.kubeflow.org/trainjob-ancestor-step: dataset-initializer
+            spec:
+              template:
+                spec:
+                  restartPolicy: Never
+                  containers:
+                    - name: dataset-initializer
+                      image: alpine:3.19
+                      command: ["/bin/sh","-c"]
+                      args:
+                        - >
+                          echo "Override via TrainJob initializer.dataset"; sleep infinity
