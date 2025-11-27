@@ -1,19 +1,19 @@
 {
   "info": {
-    "name": "Trainer APIs",
-    "schema": "https://schema.getpostman.com/json/collection/v2.1.0/collection.json",
-    "description": "Collection covering Nemo, Meta, and HF+Unsloth trainer APIs."
+    "name": "Unified Trainer API",
+    "description": "Calls for the PyTorchJob-based Training API (health, submit, status).",
+    "schema": "https://schema.getpostman.com/json/collection/v2.1.0/collection.json"
   },
   "item": [
     {
-      "name": "Nemo Trainer",
+      "name": "Unified Trainer",
       "item": [
         {
           "name": "Health Check",
           "request": {
             "method": "GET",
             "header": [],
-            "url": "{{nemo_base_url}}/healthz"
+            "url": "{{trainer_base_url}}/healthz"
           }
         },
         {
@@ -21,20 +21,14 @@
           "request": {
             "method": "POST",
             "header": [
-              {
-                "key": "Content-Type",
-                "value": "application/json"
-              },
-              {
-                "key": "X-TRAINER-TOKEN",
-                "value": "{{trainer_api_token}}"
-              }
+              { "key": "Content-Type", "value": "application/json" },
+              { "key": "X-TRAINER-TOKEN", "value": "{{trainer_api_token}}" }
             ],
             "body": {
               "mode": "raw",
-              "raw": "{\n  \"job_id\": \"nemo-sample-001\",\n  \"base_model\": {\n    \"provider\": \"nemo\",\n    \"model_name\": \"nemotron-4-340b\",\n    \"revision\": \"main\"\n  },\n  \"datasets\": [\n    {\n      \"source\": \"s3://deepfinery-training-data-123456/users/e468b458-c061-70ca-966f-bb439ffde5e3/projects/6925ccd958905b1e58631d2c/ingestion/nemo-sample-001.jsonl\",\n      \"format\": \"jsonl\"\n    }\n  ],\n  \"customization\": {\n    \"method\": \"lora\",\n    \"precision\": \"bf16\"\n  },\n  \"resources\": {\n    \"gpus\": 8,\n    \"gpu_type\": \"H100\",\n    \"cpus\": 48,\n    \"memory_gb\": 512,\n    \"max_duration_minutes\": 1440\n  },\n  \"artifacts\": {\n    \"log_uri\": \"s3://deepfinery-training-data-123456/users/e468b458-c061-70ca-966f-bb439ffde5e3/projects/6925ccd958905b1e58631d2c/logs/nemo-sample-001/\",\n    \"output_uri\": \"s3://deepfinery-training-data-123456/users/e468b458-c061-70ca-966f-bb439ffde5e3/projects/6925ccd958905b1e58631d2c/results/\"\n  },\n  \"tuning_parameters\": {\n    \"learning_rate\": 0.0001,\n    \"batch_size\": 128,\n    \"num_epochs\": 2,\n    \"warmup_ratio\": 0.05,\n    \"max_sequence_length\": 8192\n  },\n  \"extra_parameters\": {\n    \"container_image\": \"nvcr.io/nvidia/nemo:24.03\"\n  },\n  \"callbacks\": {\n    \"webhook_url\": \"https://training-studio.example.com/api/jobs/status\",\n    \"auth_header\": \"Bearer studio-token\"\n  }\n}"
+              "raw": "{\n  \"framework\": \"hf\",\n  \"model_id\": \"meta-llama/Llama-3-8B\",\n  \"run_id\": \"hf-demo-001\",\n  \"num_nodes\": 2,\n  \"gpus_per_node\": 8,\n  \"cpus_per_node\": 48,\n  \"memory_per_node_gb\": 512,\n  \"image\": \"docker.io/your-org/training-api:latest\",\n  \"checkpoint_base_uri\": \"s3://deepfinery-training/runs\",\n  \"dataset_uri\": \"s3://deepfinery-datasets/fraud/demo.jsonl\",\n  \"resume_from_checkpoint\": true,\n  \"extra_args\": {\n    \"dataset_text_field\": \"text\",\n    \"max_steps\": 50000,\n    \"lr\": 3e-5,\n    \"batch_size\": 128,\n    \"save_steps\": 500,\n    \"eval_steps\": 500\n  },\n  \"env\": {\n    \"EXPERIMENT_NAME\": \"hf-demo\"\n  }\n}"
             },
-            "url": "{{nemo_base_url}}/train"
+            "url": "{{trainer_base_url}}/train"
           }
         },
         {
@@ -42,178 +36,17 @@
           "request": {
             "method": "GET",
             "header": [
-              {
-                "key": "X-TRAINER-TOKEN",
-                "value": "{{trainer_api_token}}"
-              }
+              { "key": "X-TRAINER-TOKEN", "value": "{{trainer_api_token}}" }
             ],
-            "url": "{{nemo_base_url}}/train/{{nemo_job_id}}"
-          }
-        },
-        {
-          "name": "Cancel Job",
-          "request": {
-            "method": "POST",
-            "header": [
-              {
-                "key": "X-TRAINER-TOKEN",
-                "value": "{{trainer_api_token}}"
-              }
-            ],
-            "url": "{{nemo_base_url}}/train/{{nemo_job_id}}/cancel"
-          }
-        }
-      ]
-    },
-    {
-      "name": "Meta Trainer",
-      "item": [
-        {
-          "name": "Health Check",
-          "request": {
-            "method": "GET",
-            "header": [],
-            "url": "{{meta_base_url}}/healthz"
-          }
-        },
-        {
-          "name": "Submit Training Job",
-          "request": {
-            "method": "POST",
-            "header": [
-              {
-                "key": "Content-Type",
-                "value": "application/json"
-              },
-              {
-                "key": "X-TRAINER-TOKEN",
-                "value": "{{trainer_api_token}}"
-              }
-            ],
-            "body": {
-              "mode": "raw",
-              "raw": "{\n  \"job_id\": \"meta-sample-001\",\n  \"base_model\": {\n    \"provider\": \"meta\",\n    \"model_name\": \"Llama-3-70b\"\n  },\n  \"datasets\": [\n    {\n      \"source\": \"s3://deepfinery-training-data-123456/users/e468b458-c061-70ca-966f-bb439ffde5e3/projects/6925ccd958905b1e58631d2c/ingestion/meta-sample-001.parquet\",\n      \"format\": \"parquet\"\n    }\n  ],\n  \"customization\": {\n    \"method\": \"full\",\n    \"precision\": \"bf16\"\n  },\n  \"resources\": {\n    \"gpus\": 8,\n    \"gpu_type\": \"A100\",\n    \"cpus\": 64,\n    \"memory_gb\": 512,\n    \"max_duration_minutes\": 720\n  },\n  \"artifacts\": {\n    \"log_uri\": \"s3://deepfinery-training-data-123456/users/e468b458-c061-70ca-966f-bb439ffde5e3/projects/6925ccd958905b1e58631d2c/logs/meta-sample-001/\",\n    \"output_uri\": \"s3://deepfinery-training-data-123456/users/e468b458-c061-70ca-966f-bb439ffde5e3/projects/6925ccd958905b1e58631d2c/results/\"\n  },\n  \"tuning_parameters\": {\n    \"learning_rate\": 0.00015,\n    \"batch_size\": 256,\n    \"num_epochs\": 1,\n    \"warmup_ratio\": 0.1,\n    \"max_sequence_length\": 4096\n  },\n  \"extra_parameters\": {\n    \"executor\": \"torchrun\"\n  },\n  \"callbacks\": {\n    \"webhook_url\": \"https://training-studio.example.com/api/jobs/status\",\n    \"auth_header\": \"Bearer studio-token\"\n  }\n}"
-            },
-            "url": "{{meta_base_url}}/train"
-          }
-        },
-        {
-          "name": "Get Job Status",
-          "request": {
-            "method": "GET",
-            "header": [
-              {
-                "key": "X-TRAINER-TOKEN",
-                "value": "{{trainer_api_token}}"
-              }
-            ],
-            "url": "{{meta_base_url}}/train/{{meta_job_id}}"
-          }
-        },
-        {
-          "name": "Cancel Job",
-          "request": {
-            "method": "POST",
-            "header": [
-              {
-                "key": "X-TRAINER-TOKEN",
-                "value": "{{trainer_api_token}}"
-              }
-            ],
-            "url": "{{meta_base_url}}/train/{{meta_job_id}}/cancel"
-          }
-        }
-      ]
-    },
-    {
-      "name": "HF + Unsloth Trainer",
-      "item": [
-        {
-          "name": "Health Check",
-          "request": {
-            "method": "GET",
-            "header": [],
-            "url": "{{hf_unsloth_base_url}}/healthz"
-          }
-        },
-        {
-          "name": "Submit Training Job",
-          "request": {
-            "method": "POST",
-            "header": [
-              {
-                "key": "Content-Type",
-                "value": "application/json"
-              },
-              {
-                "key": "X-TRAINER-TOKEN",
-                "value": "{{trainer_api_token}}"
-              }
-            ],
-            "body": {
-              "mode": "raw",
-              "raw": "{\n  \"job_id\": \"hf-unsloth-sample-001\",\n  \"base_model\": {\n    \"provider\": \"huggingface\",\n    \"model_name\": \"NousResearch/Meta-Llama-3-8B\",\n    \"auth_token\": \"hf_xxx\",\n    \"huggingface_token\": \"hf_launchpad_token\"\n  },\n  \"datasets\": [\n    {\n      \"source\": \"s3://deepfinery-training-data-123456/users/e468b458-c061-70ca-966f-bb439ffde5e3/projects/6925ccd958905b1e58631d2c/ingestion/hf-unsloth-sample-001.jsonl\",\n      \"format\": \"jsonl\"\n    }\n  ],\n  \"customization\": {\n    \"method\": \"qlora\",\n    \"precision\": \"bf16\"\n  },\n  \"resources\": {\n    \"gpus\": 2,\n    \"gpu_type\": \"L4\",\n    \"cpus\": 16,\n    \"memory_gb\": 128,\n    \"max_duration_minutes\": 360\n  },\n  \"artifacts\": {\n    \"log_uri\": \"s3://deepfinery-training-data-123456/users/e468b458-c061-70ca-966f-bb439ffde5e3/projects/6925ccd958905b1e58631d2c/logs/hf-unsloth-sample-001/\",\n    \"output_uri\": \"s3://deepfinery-training-data-123456/users/e468b458-c061-70ca-966f-bb439ffde5e3/projects/6925ccd958905b1e58631d2c/results/\"\n  },\n  \"tuning_parameters\": {\n    \"learning_rate\": 0.0002,\n    \"batch_size\": 64,\n    \"num_epochs\": 3,\n    \"warmup_ratio\": 0.1,\n    \"max_sequence_length\": 4096\n  },\n  \"extra_parameters\": {\n    \"unsloth\": {\n      \"optimize_long_context\": true,\n      \"quantization\": \"bnb-nf4\",\n      \"gradient_accumulation\": 8\n    }\n  },\n  \"callbacks\": {\n    \"webhook_url\": \"https://training-studio.example.com/api/jobs/status\",\n    \"auth_header\": \"Bearer studio-token\"\n  }\n}"
-            },
-            "url": "{{hf_unsloth_base_url}}/train"
-          }
-        },
-        {
-          "name": "Get Job Status",
-          "request": {
-            "method": "GET",
-            "header": [
-              {
-                "key": "X-TRAINER-TOKEN",
-                "value": "{{trainer_api_token}}"
-              }
-            ],
-            "url": "{{hf_unsloth_base_url}}/train/{{hf_unsloth_job_id}}"
-          }
-        },
-        {
-          "name": "Cancel Job",
-          "request": {
-            "method": "POST",
-            "header": [
-              {
-                "key": "X-TRAINER-TOKEN",
-                "value": "{{trainer_api_token}}"
-              }
-            ],
-            "url": "{{hf_unsloth_base_url}}/train/{{hf_unsloth_job_id}}/cancel"
+            "url": "{{trainer_base_url}}/train/{{trainer_job_name}}"
           }
         }
       ]
     }
   ],
   "variable": [
-    {
-      "key": "nemo_base_url",
-      "value": "http://localhost:8081"
-    },
-    {
-      "key": "meta_base_url",
-      "value": "http://localhost:8082"
-    },
-    {
-      "key": "hf_unsloth_base_url",
-      "value": "http://localhost:8083"
-    },
-    {
-      "key": "trainer_api_token",
-      "value": "trainer-demo-token"
-    },
-    {
-      "key": "nemo_job_id",
-      "value": "nemo-sample-001"
-    },
-    {
-      "key": "meta_job_id",
-      "value": "meta-sample-001"
-    },
-    {
-      "key": "hf_unsloth_job_id",
-      "value": "hf-unsloth-sample-001"
-    }
+    { "key": "trainer_base_url", "value": "http://localhost:8000" },
+    { "key": "trainer_api_token", "value": "trainer-demo-token" },
+    { "key": "trainer_job_name", "value": "hf-demo-001" }
   ]
 }

@@ -1,14 +1,9 @@
-"""Shared schemas and helpers for trainer APIs."""
+"""Shared exports for the unified trainer API."""
 
-from .schemas import TrainingRequest, TrainingResponse
-from .job_runner import JobState, JobStatus, MockJobRunner
-from .trainer import BaseTrainerBackend
+from .unified_schemas import Framework, TrainingJobRequest, TrainingJobStatus
 
 __all__ = [
-    "TrainingRequest",
-    "TrainingResponse",
-    "JobState",
-    "JobStatus",
-    "MockJobRunner",
-    "BaseTrainerBackend",
+    "Framework",
+    "TrainingJobRequest",
+    "TrainingJobStatus",
 ]

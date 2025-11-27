@@ -1,74 +1,59 @@
-# Trainer APIs
+# Training API
 
-This repository provides three training APIs that wrap modern LLM fine-tuning stacks:
+A single FastAPI service (`services/training_api`) now fronts every training workload. Launcher posts a unified request that includes the framework (`nemo | hf | meta`), run metadata, hardware layout, and S3 locations. The API renders a Kubeflow [`PyTorchJob`](https://www.kubeflow.org/docs/components/training/pytorch/) that boots every replica with the same container/entrypoint. Inside the container we always call:
 
-1. **Nemo Customizer API** – exposes a Nemotron/NVIDIA Nemo style fine-tuning endpoint.
-2. **Meta Adapter API** – wraps Meta-style tuning workflows (or proxies to Nemo-compatible flow when native tooling is unavailable).
-3. **Hugging Face + Unsloth API** – accelerates Hugging Face fine-tuning with Unsloth adapters while matching the same request schema.
-
-Each API accepts a superset of tuning parameters (model location, adapters, PEFT/LORA/QLoRA options, logging sinks, artifacts, etc.), executes validation, and orchestrates a background job runner. The APIs are intentionally pluggable: you can point them at real training backends, or use the included mock job runner for local development and CI.
-
-Every service ships with a Dockerfile and Kubernetes manifests to help you deploy onto a cluster quickly.
-
-See `docs/USAGE.md` for workflows, `docs/API_SPEC.md` for the HTTP contract, and the `services/*/k8s` folders for Kubernetes deployment assets. Import the Postman collection under `docs/postman/trainer-apis.postman_collection.json` to exercise each API quickly.
-
-## Launcher / Training Studio Notes
-
-- When `base_model.provider == "huggingface"` you can now supply the launcher-provided `huggingface_token` so the backend can fetch gated checkpoints on behalf of the user.
-- Training Studio organizes inputs/outputs at `s3://deepfinery-training-data-<account>/users/<userId>/projects/<projectId>/`. Place dataset uploads in the `ingestion/` folder and save logs/results in `logs/` and `results/` respectively to keep IAM policies aligned.
-
-# training-api
-
-## Deploying to AKS with a Load Balancer
-
-We assume you already have AKS up and running with `kubectl` pointing at it. The only external requirement is container image hosting. If you want to keep things simple, just push to Docker Hub (shown below). If your org prefers GHCR or another registry, adjust the tags/logins accordingly.
-
-### 1. Build & Push Container Images
-
-Authenticate Docker once (Docker Hub example):
-
-```bash
-export DOCKERHUB_USER="<dockerhub-username-or-org>"
-export DOCKERHUB_PAT="<access-token-or-password>"
-echo "$DOCKERHUB_PAT" | docker login docker.io -u "$DOCKERHUB_USER" --password-stdin
+```
+torchrun --nproc_per_node=$GPUS_PER_NODE \
+         --nnodes=$NUM_NODES --node_rank=$RANK \
+         --master_addr=$MASTER_ADDR --master_port=$MASTER_PORT \
+         train.py --framework ${FRAMEWORK} --run-id ${RUN_ID} \
+         --checkpoint-base-uri ${CHECKPOINT_BASE_URI} \
+         --checkpoint-prefix ${CHECKPOINT_PREFIX} --dataset-uri ${DATASET_URI} \
+         --logs-uri ${LOGS_URI} --config-uri ${CONFIG_URI} --model-id ${MODEL_ID} \
+         ${EXTRA_ARGS}
 ```
 
-Build and push each API:
+The repository-root `train.py` script is the torchrun entrypoint. It parses the framework switch, initializes checkpoint/log/config folders under `s3://<runs-bucket>/<RUN_ID>/framework=<framework>/`, finds the most recent checkpoint when resume is requested, and dispatches to `run_nemo`, `run_hf`, or `run_meta` where framework-specific trainers live. torchrun is only responsible for distributed bootstrap; all checkpoint IO happens in those framework functions so every run follows the same S3 layout.
+
+## Trainer Image Requirements
+
+The container that runs `train.py` must include the ML dependencies used by the three frameworks:
+
+- PyTorch with CUDA (`torch`, `torchvision`, `torch.distributed`),
+- Hugging Face Transformers + Datasets (`transformers`, `datasets`),
+- PyTorch Lightning (used by the NeMo-style runner),
+- `boto3` for checkpoint/log uploads to S3,
+- Optionally `nemo_toolkit` to take advantage of `nemo.utils.exp_manager` (the NeMo runner will use it when available).
+
+The provided `train.py` imports the framework modules lazily, so your API pods can stay lightweight while the trainer image carries the heavy dependencies. Export your storage credentials (e.g., AWS keys) through the pod `env` or the node IAM role so boto3 can reach the buckets referenced by `CHECKPOINT_BASE_URI` and `DATASET_URI`.
+
+## Framework Behavior
+
+- **NeMo runner** – builds a Lightning-compatible trainer around Hugging Face causal LM weights, integrates with `nemo.utils.exp_manager` when available, and mirrors NeMo's checkpoint cadence by uploading `.ckpt` files and Lightning logs to the shared S3 prefix. Override `extra_args` (batch size, epochs, LR, etc.) to fine-tune the Lightning training loop.
+- **Hugging Face runner** – uses `transformers.Trainer`. Every saved `checkpoint-<step>` directory is uploaded to `.../checkpoints/` immediately so you can resume mid-run. The latest checkpoint is automatically downloaded and passed to `Trainer.train(resume_from_checkpoint=...)` when `resume_from_checkpoint` is set.
+- **Meta/custom runner** – spins up a PyTorch/FSDP training loop that tokenizes the JSONL dataset, wraps the model with FSDP whenever `world_size > 1`, and saves `.pt` checkpoints containing model + optimizer state. Those checkpoints live under `checkpoints/step-XXXXXX.pt` and are downloaded before resuming.
+
+Datasets are expected to be JSONL files with a `text` field by default. Override `extra_args.dataset_text_field` to point at a different key. The helper utilities automatically download `DATASET_URI` (S3 or local), split it into train/eval shards, and feed each framework-specific trainer.
+
+## Architecture
+
+- **Orchestration layer** – Kubeflow `PyTorchJob` CRD. Each submission includes `num_nodes`, `gpus_per_node`, container image, and env vars so the Training Operator can launch workers.
+- **Launch layer** – torchrun is always the container entrypoint; it receives cluster metadata via env vars injected by the Training Operator (`RANK`, `WORLD_SIZE`, `MASTER_ADDR`, `MASTER_PORT`).
+- **Framework layer** – `train.py` dispatches to `run_nemo/run_hf/run_meta`. These helpers construct trainers, manage checkpoint + resume logic, and write configs/logs/metadata back to the normalized S3 hierarchy.
+- **API layer** – `services/training_api` exposes `/healthz`, `POST /train`, and `GET /train/{name}`. Requests use the `TrainingJobRequest` schema from `common/unified_schemas.py` and responses return `TrainingJobStatus` summaries.
+
+See `docs/USAGE.md` for an end-to-end walkthrough and `docs/API_SPEC.md` for the exact JSON schema.
+
+## Running Locally
 
 ```bash
-# Nemo
-docker build -t docker.io/$DOCKERHUB_USER/nemo-trainer:1.0 services/nemo_api
-docker push docker.io/$DOCKERHUB_USER/nemo-trainer:1.0
-
-# Meta
-docker build -t docker.io/$DOCKERHUB_USER/meta-trainer:1.0 services/meta_api
-docker push docker.io/$DOCKERHUB_USER/meta-trainer:1.0
-
-# HF + Unsloth
-docker build -t docker.io/$DOCKERHUB_USER/hf-unsloth-trainer:1.0 services/hf_unsloth_api
-docker push docker.io/$DOCKERHUB_USER/hf-unsloth-trainer:1.0
-```
-
-Update the `image:` fields inside `services/<api>/k8s/deployment.yaml` to reference the tags you just pushed (e.g., `docker.io/myuser/nemo-trainer:1.0`).
-
-### 2. Configure the Hardcoded API Token
-
-The `/train` endpoints require the `X-TRAINER-TOKEN` header when the `TRAINER_API_TOKEN` environment variable is present. The manifests now ship with a placeholder value (`trainer-demo-token`) so you can get going quickly:
-
-```yaml
-env:
-  - name: TRAINER_API_TOKEN
-    value: "trainer-demo-token"
-```
-
-Update the value before deploying (or better yet, source it from a Kubernetes Secret). For local testing you can run:
-
-```bash
+python3 -m venv .venv && source .venv/bin/activate
+pip install -r services/training_api/requirements.txt
 export TRAINER_API_TOKEN=trainer-demo-token
-uvicorn services.nemo_api.app:app --reload
+uvicorn services.training_api.app:app --reload
 ```
 
-Then send requests with the matching header:
+Send requests with the `X-TRAINER-TOKEN` header:
 
 ```bash
 curl -H "X-TRAINER-TOKEN: trainer-demo-token" \
@@ -77,155 +62,76 @@ curl -H "X-TRAINER-TOKEN: trainer-demo-token" \
      http://localhost:8000/train
 ```
 
-If the training job needs to download/upload datasets from Deepfinery S3, also export the shared credentials (or rely on the included `.env`):
+`scripts/sample-unified-request.json` (create your own) should follow the structure below:
 
-```bash
-export AWS_ACCESS_KEY_ID=XXXX
-export AWS_SECRET_ACCESS_KEY='YYYYY'
+```json
+{
+  "framework": "nemo",
+  "model_id": "nemotron-8b-fx",
+  "num_nodes": 2,
+  "gpus_per_node": 8,
+  "cpus_per_node": 48,
+  "memory_per_node_gb": 512,
+  "image": "ghcr.io/deepfinery/trainer:latest",
+  "run_id": "fx_ruleset_v3_2025_11_26_01",
+  "checkpoint_base_uri": "s3://deepfinery-training/runs",
+  "dataset_uri": "s3://deepfinery-datasets/fx/v3/",
+  "resume_from_checkpoint": true,
+  "extra_args": {
+    "max_steps": 50000,
+    "lr": 3e-5,
+    "batch_size": 128
+  }
+}
 ```
 
-### 3. Apply the Manifests
+## Container Build & Deploy
 
-The `services/*/k8s` directories contain a Deployment, ConfigMap (where applicable), and a Service. Each Service is of type `LoadBalancer`, so AKS automatically wires the pods to an Azure Public Load Balancer.
-
-```bash
-kubectl apply -f services/nemo_api/k8s/
-kubectl apply -f services/meta_api/k8s/
-kubectl apply -f services/hf_unsloth_api/k8s/
-```
-
-Within a few minutes each Service should list an external IP:
+The unified API ships with a Dockerfile under `services/training_api/Dockerfile`.
 
 ```bash
-kubectl get service -l app=nemo-trainer
-kubectl get service -l app=meta-trainer
-kubectl get service -l app=hf-unsloth-trainer
+export DOCKERHUB_USER="<dockerhub-username-or-org>"
+export DOCKERHUB_PAT="<access-token-or-password>"
+echo "$DOCKERHUB_PAT" | docker login docker.io -u "$DOCKERHUB_USER" --password-stdin
+
+IMAGE_TAG=1.0
+ROOT=$(pwd)
+docker build -t docker.io/$DOCKERHUB_USER/training-api:$IMAGE_TAG -f services/training_api/Dockerfile "$ROOT"
+docker push docker.io/$DOCKERHUB_USER/training-api:$IMAGE_TAG
 ```
 
-Send requests by calling `http://<external-ip>/train` (or `/healthz`) and always include `X-TRAINER-TOKEN`.
-
-#### Example Nemo Redeploy Commands
+Update `services/training_api/k8s/deployment.yaml` with your tag, then apply the manifests:
 
 ```bash
-export DOCKERHUB_USER=<dockerhub-username-or-org>
-docker build -t docker.io/$DOCKERHUB_USER/nemo-trainer:1.0 -f services/nemo_api/Dockerfile .
-docker push docker.io/$DOCKERHUB_USER/nemo-trainer:1.0
-kubectl apply -f services/nemo_api/k8s/
-kubectl get service -l app=nemo-trainer
-kubectl get all
-# Optional clean redeploy
-kubectl delete -f services/nemo_api/k8s/
-kubectl apply -f services/nemo_api/k8s/
-kubectl get all
+kubectl apply -f services/training_api/k8s/
 ```
 
-### 4. Optional Hardening
+The manifests create:
 
-- Swap the inline token for a Kubernetes Secret (e.g., `kubectl create secret generic trainer-api --from-literal=token=...` and reference it with `valueFrom.secretKeyRef`).
-- Front the three Services with an Ingress Controller or Azure Application Gateway so you get TLS termination and a single hostname.
-- Configure Azure Monitor/Container Insights for observability and add Horizontal Pod Autoscalers for bursty training loads.
+- A Deployment that runs the FastAPI app, injects `TRAINER_API_TOKEN`, and grants RBAC access to the `kubeflow.org/v1` `pytorchjobs` resource.
+- A LoadBalancer Service exposing port 8080.
+- ServiceAccount/Role/RoleBinding scoped to PyTorchJob CRUD.
 
-## Kubeflow Trainer Integration
+Check the service IP and submit jobs:
 
-Install the NVIDIA GPU Operator (or equivalent drivers) plus the Kubeflow Trainer controller before switching away
-from the mock scheduler. The APIs now emit real [`TrainJob`](https://www.kubeflow.org/docs/components/trainer/) custom resources when
-`TRAINER_JOB_RUNNER` is set to `kubernetes` (the default in the bundled manifests). Each backend pulls its runtime
-settings from environment variables:
+```bash
+kubectl get svc training-api -o wide
+export TRAINER_BASE_URL="http://<external-ip>"
+```
 
-- `TRAINER_RUNTIME_NAME`: cluster-scoped or namespaced `TrainingRuntime` to use (`nemo-runtime`, `meta-runtime`,
-  `hf-unsloth-runtime` by default). Override per-request by including `extra_parameters.runtime_ref`.
-- `TRAINER_TRAINJOB_API_VERSION`: CRD version (defaults to `trainer.kubeflow.org/v1alpha1`).
-- `TRAINER_JOBS_NAMESPACE`: namespace where TrainJobs should land. The manifests use the pod namespace via a
-  `fieldRef`.
+## Kubeflow & Torchrun Notes
 
-Deployments must use a service account with permissions to `create/get/list/watch/delete` the
-`trainer.kubeflow.org/trainjobs` resource. The `services/*/k8s/deployment.yaml` files now ship with a namespaced
-`Role`/`RoleBinding`.
+- Each request becomes a `PyTorchJob` where `Master.replicas=1` and `Worker.replicas=num_nodes-1` (when `num_nodes>1`).
+- Env vars such as `FRAMEWORK`, `RUN_ID`, `MODEL_ID`, `NUM_NODES`, `GPUS_PER_NODE`, `CHECKPOINT_BASE_URI`, `CHECKPOINT_PREFIX`, and `TRAINING_EXTRA_ARGS_JSON` are injected into every pod.
+- `train.py` consumes these env vars, discovers the latest checkpoint under `s3://<runs>/<RUN_ID>/framework=<f>/checkpoints/step-*.json`, and resumes when `resume_from_checkpoint` (or `--resume`) is set.
+- Checkpoints/logs/configs live under `s3://deepfinery-training/runs/<RUN_ID>/framework=<framework>/{checkpoints,logs,config}` so Training Studio can reason about any run regardless of framework.
 
-Every submitted request is translated into a TrainJob manifest that contains:
+## Tooling
 
-- `runtimeRef`: resolved from the environment or `extra_parameters.runtime_ref`.
-- `trainer` block: image, command/args, resource requests, and merged environment variables. The raw
-  `TrainingRequest` is exposed to the container via `TRAINING_REQUEST_JSON`, `TRAINING_DATASETS_JSON`, etc.
-- Optional dataset/model initializer URIs and any custom labels/annotations supplied via `extra_parameters`.
+- **API schema** – `docs/API_SPEC.md`
+- **Usage walkthrough** – `docs/USAGE.md`
+- **Deployment tips** – `docs/DEPLOYMENT.md`
+- **Postman collection** – `docs/postman/trainer-apis.postman_collection.json` (set `trainer_base_url` and `trainer_api_token`).
+- **Helper script** – `scripts/build_and_deploy.sh` builds/pushes the image and reapplies manifests.
 
-If you need different launchers (e.g., NeMo CLI vs. `torchrun`), override `extra_parameters.trainer_command`,
-`trainer_args`, and `trainer_env` directly in the submission payload. The Unsloth backend also accepts
-`extra_parameters.unsloth` which is passed to containers as `UNSLOTH_OPTIONS_JSON`.
-
-Because the TrainJob is a first-class object, status polling (`GET /train/{job_id}`) now reflects the CRD state.
-Callbacks remain enabled: when a webhook is configured the API polls the TrainJob until it reaches a terminal state
-and forwards the updates.
-
-## Calling the API
-
-1. Find the service endpoint:
-   ```bash
-   kubectl get svc nemo-trainer -o wide
-   # or meta-trainer / hf-unsloth-trainer depending on the backend
-   export TRAINER_BASE_URL="http://<external-ip-from-get-svc>"
-   ```
-2. Create a payload (example for the HF + Unsloth service showing the launcher-provided Hugging Face token plus the canonical Deepfinery S3 paths):
-   ```json
-   {
-     "job_id": "hf-demo-001",
-     "base_model": {
-       "provider": "huggingface",
-       "model_name": "meta-llama/Llama-2-7b",
-       "auth_token": "hf_token",
-       "huggingface_token": "hf_launchpad_token"
-     },
-     "datasets": [
-       {
-         "source": "s3://deepfinery-training-data-123456/users/e468b458-c061-70ca-966f-bb439ffde5e3/projects/6925ccd958905b1e58631d2c/ingestion/1764106730023-tx_aml_dataset.jsonl",
-         "format": "jsonl"
-       }
-     ],
-     "customization": {
-       "method": "qlora",
-       "precision": "bf16",
-       "gradient_checkpointing": true
-     },
-     "resources": {
-       "gpus": 4,
-       "gpu_type": "A100",
-       "cpus": 32,
-       "memory_gb": 256,
-       "max_duration_minutes": 720
-     },
-     "artifacts": {
-       "log_uri": "s3://deepfinery-training-data-123456/users/e468b458-c061-70ca-966f-bb439ffde5e3/projects/6925ccd958905b1e58631d2c/logs/hf-demo-001/",
-       "output_uri": "s3://deepfinery-training-data-123456/users/e468b458-c061-70ca-966f-bb439ffde5e3/projects/6925ccd958905b1e58631d2c/results/"
-     },
-     "tuning_parameters": {
-       "learning_rate": 0.0002,
-       "batch_size": 64,
-       "num_epochs": 3,
-       "warmup_ratio": 0.1,
-       "max_sequence_length": 4096
-     }
-   }
-   ```
-   Save this payload as `payload.json`. Swap the `provider` and dataset/artifact URIs as needed if you're targeting the Nemo or Meta services.
-3. Send the request with the trainer token header (matching whatever is set in `TRAINER_API_TOKEN` or the `.env` file):
-   ```bash
-   curl -X POST "$TRAINER_BASE_URL/train" \
-        -H "Content-Type: application/json" \
-        -H "X-TRAINER-TOKEN: ${TRAINER_API_TOKEN:-trainer-demo-token}" \
-        -d @payload.json
-   ```
-4. Poll job status or cancel if needed:
-   ```bash
-   # Status
-   curl "$TRAINER_BASE_URL/train/hf-demo-001" \
-        -H "X-TRAINER-TOKEN: ${TRAINER_API_TOKEN:-trainer-demo-token}"
-
-   # Cancel
-   curl -X POST "$TRAINER_BASE_URL/train/hf-demo-001/cancel" \
-        -H "X-TRAINER-TOKEN: ${TRAINER_API_TOKEN:-trainer-demo-token}"
-   ```
-5. If you include a `callbacks.webhook_url` in the submission payload, the trainer automatically POSTs status updates (job id, backend id, status, detail, timestamp) to Training Studio every minute while the job is running or until it reaches a terminal state. Set `TRAINER_CALLBACK_INTERVAL_SECONDS` to tune the cadence (default 60s).
-
-### Postman
-
-Import `docs/postman/trainer-apis.postman_collection.json`, set the `nemo_base_url`, `meta_base_url`, `hf_unsloth_base_url`, `trainer_api_token`, and the sample job ids, then choose the `Submit Training Job`/`Get Job Status`/`Cancel Job` requests for the service you deployed. The bodies already reference the Deepfinery S3 bucket layout, include the Hugging Face token field, and ship with a sample callback configuration so you only need to tweak IDs or resource sizes.
+Training Studio or other callers only need to choose the framework, fill in S3 URIs, hardware counts, and optional `extra_args`: the API handles everything else.

@@ -1,0 +1,26 @@
+{
+  "framework": "nemo",
+  "model_id": "nemotron-8b-fx",
+  "run_id": "fx_ruleset_v3_2025_11_26_01",
+  "num_nodes": 2,
+  "gpus_per_node": 8,
+  "cpus_per_node": 48,
+  "memory_per_node_gb": 512,
+  "image": "ghcr.io/deepfinery/trainer:latest",
+  "checkpoint_base_uri": "s3://deepfinery-training/runs",
+  "dataset_uri": "s3://deepfinery-datasets/fx/v3/",
+  "resume_from_checkpoint": true,
+  "extra_args": {
+    "max_steps": 50000,
+    "lr": 3e-5,
+    "batch_size": 128,
+    "dataset_text_field": "text",
+    "save_steps": 500
+  },
+  "env": {
+    "EXPERIMENT_NAME": "fx-ruleset-v3"
+  },
+  "annotations": {
+    "deepfinery.com/experiment": "fx-ruleset"
+  }
+}

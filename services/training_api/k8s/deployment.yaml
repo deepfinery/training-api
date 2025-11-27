@@ -1,0 +1,79 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: training-api
+  labels:
+    app: training-api
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: training-api
+  template:
+    metadata:
+      labels:
+        app: training-api
+    spec:
+      serviceAccountName: training-api-sa
+      containers:
+        - name: api
+          image: docker.io/deepfinery/training-api:latest
+          imagePullPolicy: IfNotPresent
+          ports:
+            - containerPort: 8080
+          env:
+            - name: TRAINER_API_TOKEN
+              value: "trainer-demo-token"
+            - name: TRAINER_LOG_LEVEL
+              value: "INFO"
+          readinessProbe:
+            httpGet:
+              path: /healthz
+              port: 8080
+            initialDelaySeconds: 5
+            periodSeconds: 10
+          livenessProbe:
+            httpGet:
+              path: /healthz
+              port: 8080
+            initialDelaySeconds: 10
+            periodSeconds: 20
+          resources:
+            requests:
+              cpu: "500m"
+              memory: "1Gi"
+            limits:
+              cpu: "2"
+              memory: "4Gi"
+---
+apiVersion: v1
+kind: ServiceAccount
+metadata:
+  name: training-api-sa
+  labels:
+    app: training-api
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: Role
+metadata:
+  name: training-api-role
+  labels:
+    app: training-api
+rules:
+  - apiGroups: ["kubeflow.org"]
+    resources: ["pytorchjobs"]
+    verbs: ["get", "list", "watch", "create", "delete"]
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: RoleBinding
+metadata:
+  name: training-api-rb
+  labels:
+    app: training-api
+subjects:
+  - kind: ServiceAccount
+    name: training-api-sa
+roleRef:
+  apiGroup: rbac.authorization.k8s.io
+  kind: Role
+  name: training-api-role
